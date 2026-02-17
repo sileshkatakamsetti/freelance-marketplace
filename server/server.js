@@ -38,7 +38,7 @@ connectDB();
 // =======================
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || "*", // ✅ Vercel URL in production
+    origin: process.env.CLIENT_URL || "*",
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE"],
   })
@@ -77,31 +77,33 @@ const io = new Server(server, {
   },
 });
 
-// Socket connection
 io.on("connection", (socket) => {
   console.log("🟢 User connected:", socket.id);
 
-  // Join order-based room
+  // Join order room
   socket.on("joinRoom", (orderId) => {
+    if (!orderId) return;
     socket.join(orderId);
-    console.log(`📌 User joined room: ${orderId}`);
+    console.log(`📌 Joined room: ${orderId}`);
   });
 
-  // Send message
+  // ✅ FIXED SEND MESSAGE
   socket.on("sendMessage", async (data) => {
     try {
+      const { orderId, sender, message } = data;
+
+      if (!orderId || !sender || !message) return;
+
       const savedMessage = await Message.create({
-        order: data.orderId,
-        sender: data.sender,
-        receiver: data.receiver,
-        content: data.message,
+        order: orderId,
+        sender: sender, // ✅ sender is USER ID
+        content: message,
       });
 
       const populatedMessage = await Message.findById(savedMessage._id)
-        .populate("sender", "name email role")
-        .populate("receiver", "name email role");
+        .populate("sender", "name email role");
 
-      io.to(data.orderId).emit("receiveMessage", populatedMessage);
+      io.to(orderId).emit("receiveMessage", populatedMessage);
     } catch (error) {
       console.error("❌ Socket error:", error.message);
     }
