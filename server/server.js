@@ -83,7 +83,7 @@ app.get("/", (req, res) => {
 });
 
 // =======================
-// SOCKET.IO SETUP (✅ FIXED)
+// SOCKET.IO SETUP
 // =======================
 const server = http.createServer(app);
 
