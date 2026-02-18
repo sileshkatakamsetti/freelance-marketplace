@@ -21,7 +21,6 @@ const paymentRoutes = require("./routes/paymentRoutes");
 const userRoutes = require("./routes/userRoutes");
 const withdrawalRoutes = require("./routes/withdrawalRoutes");
 
-
 // =======================
 // MODELS
 // =======================
@@ -38,11 +37,22 @@ const app = express();
 connectDB();
 
 // =======================
-// GLOBAL MIDDLEWARE
+// CORS CONFIG (✅ FIXED)
 // =======================
+const allowedOrigins = [
+  "http://localhost:3000",
+  "https://freelancer-marketplace-client.netlify.app",
+];
+
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || "http://localhost:3000",
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("CORS not allowed"));
+      }
+    },
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE"],
   })
@@ -65,8 +75,6 @@ app.use("/api/payment", paymentRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/withdrawals", withdrawalRoutes);
 
-
-
 // =======================
 // ROOT ROUTE
 // =======================
@@ -81,7 +89,7 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: process.env.CLIENT_URL || "http://localhost:3000",
+    origin: allowedOrigins,
     methods: ["GET", "POST"],
   },
 });
@@ -89,32 +97,26 @@ const io = new Server(server, {
 io.on("connection", (socket) => {
   console.log("🟢 User connected:", socket.id);
 
-  // JOIN ROOM (ORDER ID)
   socket.on("joinRoom", (orderId) => {
     if (!orderId) return;
     socket.join(orderId);
     console.log(`📌 Joined room: ${orderId}`);
   });
 
-  // SEND MESSAGE (🔥 MAIN FIX HERE)
   socket.on("sendMessage", async (data) => {
     try {
-      const { orderId, sender, content } = data; // ✅ sender (NOT senderId)
-
+      const { orderId, sender, content } = data;
       if (!orderId || !sender || !content) return;
 
-      // SAVE MESSAGE
       const savedMessage = await Message.create({
         order: orderId,
-        sender: sender,
-        content: content,
+        sender,
+        content,
       });
 
-      // POPULATE SENDER NAME
       const populatedMessage = await Message.findById(savedMessage._id)
         .populate("sender", "name role");
 
-      // SEND TO BOTH USERS IN ROOM
       io.to(orderId).emit("receiveMessage", populatedMessage);
     } catch (error) {
       console.error("❌ Socket message error:", error.message);
