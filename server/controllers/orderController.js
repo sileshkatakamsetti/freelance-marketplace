@@ -1,11 +1,9 @@
 const Order = require("../models/Order");
 const Gig = require("../models/Gig");
 
-/**
- * =================================================
- * CREATE ORDER (CLIENT ONLY)
- * =================================================
- */
+/* =====================================
+   CREATE ORDER (CLIENT)
+===================================== */
 exports.createOrder = async (req, res) => {
   try {
     if (req.user.role !== "client") {
@@ -13,27 +11,30 @@ exports.createOrder = async (req, res) => {
     }
 
     const { gigId } = req.body;
-
     if (!gigId) {
-      return res.status(400).json({ message: "Gig ID is required" });
+      return res.status(400).json({ message: "Gig ID required" });
     }
 
     const gig = await Gig.findById(gigId);
-
     if (!gig) {
       return res.status(404).json({ message: "Gig not found" });
     }
 
-    const existingOrder = await Order.findOne({
-      gig: gig._id,
+    // ✅ IMPORTANT FIX (you already noted this correctly)
+    if (!gig.freelancer) {
+      return res.status(400).json({
+        message: "This gig has no freelancer assigned",
+      });
+    }
+
+    const existing = await Order.findOne({
+      gig: gigId,
       client: req.user.id,
       status: { $ne: "completed" },
     });
 
-    if (existingOrder) {
-      return res.status(400).json({
-        message: "You already have an active order for this gig",
-      });
+    if (existing) {
+      return res.status(400).json({ message: "Order already exists" });
     }
 
     const order = await Order.create({
@@ -41,234 +42,172 @@ exports.createOrder = async (req, res) => {
       client: req.user.id,
       freelancer: gig.freelancer,
       price: gig.price,
+      status: "pending",
       paymentStatus: "unpaid",
     });
 
     res.status(201).json(order);
-
-  } catch (error) {
-    res.status(500).json({ message: error.message });
+  } catch (err) {
+    console.error("Create order error:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
-
-/**
- * =================================================
- * MARK ORDER AS PAID (CLIENT ONLY)
- * =================================================
- */
-exports.markOrderPaid = async (req, res) => {
-  try {
-    if (req.user.role !== "client") {
-      return res.status(403).json({ message: "Only clients can pay" });
-    }
-
-    const order = await Order.findById(req.params.id);
-
-    if (!order) {
-      return res.status(404).json({ message: "Order not found" });
-    }
-
-    if (order.client.toString() !== req.user.id) {
-      return res.status(403).json({ message: "Access denied" });
-    }
-
-    order.paymentStatus = "paid";
-    await order.save();
-
-    res.status(200).json({ message: "Payment successful", order });
-
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-
-/**
- * =================================================
- * CANCEL ORDER (CLIENT ONLY)
- * =================================================
- */
-exports.cancelOrder = async (req, res) => {
-  try {
-    if (req.user.role !== "client") {
-      return res.status(403).json({ message: "Only clients can cancel" });
-    }
-
-    const order = await Order.findById(req.params.id);
-
-    if (!order) {
-      return res.status(404).json({ message: "Order not found" });
-    }
-
-    if (order.client.toString() !== req.user.id) {
-      return res.status(403).json({ message: "Access denied" });
-    }
-
-    order.status = "cancelled";
-    await order.save();
-
-    res.status(200).json(order);
-
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-
-/**
- * =================================================
- * CLIENT: VIEW OWN ORDERS
- * =================================================
- */
+/* =====================================
+   CLIENT ORDERS
+===================================== */
 exports.getClientOrders = async (req, res) => {
   try {
-    if (req.user.role !== "client") {
-      return res.status(403).json({ message: "Access denied" });
-    }
-
     const orders = await Order.find({ client: req.user.id })
       .populate("gig", "title price")
-      .populate("freelancer", "name email");
+      .populate("freelancer", "name");
 
-    res.status(200).json(orders);
-
-  } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(200).json({ orders });
+  } catch (err) {
+    console.error("Client orders error:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
-
-/**
- * =================================================
- * FREELANCER: VIEW ASSIGNED ORDERS
- * =================================================
- */
+/* =====================================
+   FREELANCER ORDERS
+===================================== */
 exports.getFreelancerOrders = async (req, res) => {
   try {
-    if (req.user.role !== "freelancer") {
-      return res.status(403).json({ message: "Access denied" });
-    }
-
     const orders = await Order.find({ freelancer: req.user.id })
       .populate("gig", "title price")
-      .populate("client", "name email");
+      .populate("client", "name");
 
-    res.status(200).json(orders);
-
-  } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(200).json({ orders });
+  } catch (err) {
+    console.error("Freelancer orders error:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
-
-/**
- * =================================================
- * FREELANCER: UPDATE ORDER STATUS
- * =================================================
- */
-exports.updateOrderStatus = async (req, res) => {
+/* =====================================
+   STEP 4 – SUBMIT WORK (FREELANCER)
+===================================== */
+exports.submitWork = async (req, res) => {
   try {
-    const { status } = req.body;
-
-    if (!["accepted", "completed"].includes(status)) {
-      return res.status(400).json({ message: "Invalid status" });
-    }
-
-    const order = await Order.findById(req.params.id);
+    const { message, link } = req.body;
+    const order = await Order.findById(req.params.orderId);
 
     if (!order) {
       return res.status(404).json({ message: "Order not found" });
-    }
-
-    if (status === "completed" && order.paymentStatus !== "paid") {
-      return res.status(400).json({
-        message: "Cannot complete unpaid order",
-      });
     }
 
     if (order.freelancer.toString() !== req.user.id) {
       return res.status(403).json({ message: "Access denied" });
     }
 
-    order.status = status;
+    if (order.paymentStatus !== "paid") {
+      return res.status(400).json({ message: "Payment not completed" });
+    }
+
+    order.deliveryMessage = message;
+    order.deliveryLink = link;
+    order.deliveredAt = new Date();
+    order.status = "delivered";
+
     await order.save();
 
-    res.status(200).json(order);
-
-  } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(200).json({ message: "Work submitted" });
+  } catch (err) {
+    console.error("Submit work error:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
-
-/**
- * =================================================
- * SEND MESSAGE INSIDE ORDER
- * =================================================
- */
-exports.sendMessage = async (req, res) => {
+/* =====================================
+   STEP 5 – CLIENT ACCEPT WORK
+===================================== */
+exports.completeOrder = async (req, res) => {
   try {
-    const { message } = req.body;
-
-    if (!message) {
-      return res.status(400).json({ message: "Message is required" });
-    }
-
-    const order = await Order.findById(req.params.id);
+    const order = await Order.findById(req.params.orderId);
 
     if (!order) {
       return res.status(404).json({ message: "Order not found" });
     }
 
-    if (
-      order.client.toString() !== req.user.id &&
-      order.freelancer.toString() !== req.user.id
-    ) {
+    if (order.client.toString() !== req.user.id) {
       return res.status(403).json({ message: "Access denied" });
     }
 
-    order.messages.push({
-      sender: req.user.id,
-      message,
-    });
+    if (order.status !== "delivered") {
+      return res.status(400).json({ message: "Work not delivered yet" });
+    }
+
+    order.status = "completed";
+    await order.save();
+
+    res.status(200).json({ message: "Order completed" });
+  } catch (err) {
+    console.error("Complete order error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+/* =====================================
+   STEP 6 – CLIENT REVIEW & RATING
+===================================== */
+exports.addReview = async (req, res) => {
+  try {
+    const { rating, comment } = req.body;
+    const order = await Order.findById(req.params.orderId);
+
+    if (!order) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+
+    if (order.client.toString() !== req.user.id) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    if (order.status !== "completed") {
+      return res
+        .status(400)
+        .json({ message: "Order not completed yet" });
+    }
+
+    if (order.review && order.review.rating) {
+      return res
+        .status(400)
+        .json({ message: "Review already submitted" });
+    }
+
+    order.review = {
+      rating,
+      comment,
+      reviewedAt: new Date(),
+    };
 
     await order.save();
 
-    res.status(200).json(order.messages);
-
-  } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.json({ message: "Review submitted successfully" });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 };
 
 
-/**
- * =================================================
- * GET SINGLE ORDER
- * =================================================
- */
+/* =====================================
+   SINGLE ORDER
+===================================== */
 exports.getSingleOrder = async (req, res) => {
   try {
     const order = await Order.findById(req.params.id)
       .populate("gig")
-      .populate("client", "name email")
-      .populate("freelancer", "name email");
+      .populate("client", "name")
+      .populate("freelancer", "name");
 
     if (!order) {
       return res.status(404).json({ message: "Order not found" });
     }
 
-    if (
-      order.client.toString() !== req.user.id &&
-      order.freelancer.toString() !== req.user.id
-    ) {
-      return res.status(403).json({ message: "Access denied" });
-    }
-
     res.status(200).json(order);
-
-  } catch (error) {
-    res.status(500).json({ message: error.message });
+  } catch (err) {
+    console.error("Single order error:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };

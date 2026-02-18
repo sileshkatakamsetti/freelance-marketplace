@@ -17,6 +17,10 @@ const reviewRoutes = require("./routes/reviewRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
 const adminRoutes = require("./routes/adminRoutes");
 const messageRoutes = require("./routes/messageRoutes");
+const paymentRoutes = require("./routes/paymentRoutes");
+const userRoutes = require("./routes/userRoutes");
+const withdrawalRoutes = require("./routes/withdrawalRoutes");
+
 
 // =======================
 // MODELS
@@ -29,16 +33,16 @@ const Message = require("./models/Message");
 const app = express();
 
 // =======================
-// 🔗 CONNECT DATABASE
+// CONNECT DATABASE
 // =======================
 connectDB();
 
 // =======================
-// 🔥 GLOBAL MIDDLEWARE
+// GLOBAL MIDDLEWARE
 // =======================
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || "*",
+    origin: process.env.CLIENT_URL || "http://localhost:3000",
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE"],
   })
@@ -47,7 +51,7 @@ app.use(
 app.use(express.json());
 
 // =======================
-// 🚀 API ROUTES
+// API ROUTES
 // =======================
 app.use("/api/auth", authRoutes);
 app.use("/api/test", testRoutes);
@@ -57,22 +61,27 @@ app.use("/api/reviews", reviewRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/messages", messageRoutes);
+app.use("/api/payment", paymentRoutes);
+app.use("/api/users", userRoutes);
+app.use("/api/withdrawals", withdrawalRoutes);
+
+
 
 // =======================
-// 🌍 ROOT ROUTE
+// ROOT ROUTE
 // =======================
 app.get("/", (req, res) => {
   res.status(200).send("🚀 Freelance Marketplace API is running");
 });
 
 // =======================
-// 🔥 SOCKET.IO SETUP
+// SOCKET.IO SETUP (✅ FIXED)
 // =======================
 const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: process.env.CLIENT_URL || "*",
+    origin: process.env.CLIENT_URL || "http://localhost:3000",
     methods: ["GET", "POST"],
   },
 });
@@ -80,32 +89,35 @@ const io = new Server(server, {
 io.on("connection", (socket) => {
   console.log("🟢 User connected:", socket.id);
 
-  // Join order room
+  // JOIN ROOM (ORDER ID)
   socket.on("joinRoom", (orderId) => {
     if (!orderId) return;
     socket.join(orderId);
     console.log(`📌 Joined room: ${orderId}`);
   });
 
-  // ✅ FIXED SEND MESSAGE
+  // SEND MESSAGE (🔥 MAIN FIX HERE)
   socket.on("sendMessage", async (data) => {
     try {
-      const { orderId, sender, message } = data;
+      const { orderId, sender, content } = data; // ✅ sender (NOT senderId)
 
-      if (!orderId || !sender || !message) return;
+      if (!orderId || !sender || !content) return;
 
+      // SAVE MESSAGE
       const savedMessage = await Message.create({
         order: orderId,
-        sender: sender, // ✅ sender is USER ID
-        content: message,
+        sender: sender,
+        content: content,
       });
 
+      // POPULATE SENDER NAME
       const populatedMessage = await Message.findById(savedMessage._id)
-        .populate("sender", "name email role");
+        .populate("sender", "name role");
 
+      // SEND TO BOTH USERS IN ROOM
       io.to(orderId).emit("receiveMessage", populatedMessage);
     } catch (error) {
-      console.error("❌ Socket error:", error.message);
+      console.error("❌ Socket message error:", error.message);
     }
   });
 
@@ -115,7 +127,7 @@ io.on("connection", (socket) => {
 });
 
 // =======================
-// 🟢 START SERVER
+// START SERVER
 // =======================
 const PORT = process.env.PORT || 5000;
 

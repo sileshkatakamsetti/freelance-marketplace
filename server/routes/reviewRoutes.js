@@ -1,25 +1,20 @@
 const express = require("express");
 const router = express.Router();
+const auth = require("../middleware/authMiddleware");
 
 const {
   createReview,
-  getReviewsByGig,
+  getFreelancerReviews,
 } = require("../controllers/reviewController");
 
-const protect = require("../middleware/authMiddleware");
+/* =====================================
+   CLIENT CREATE REVIEW
+===================================== */
+router.post("/", auth, createReview);
 
-/*
-========================================
-POST REVIEW (Protected)
-========================================
-*/
-router.post("/", protect, createReview);
-
-/*
-========================================
-GET REVIEWS BY GIG ID (Public)
-========================================
-*/
-router.get("/:gigId", getReviewsByGig);
+/* =====================================
+   FREELANCER VIEW REVIEWS
+===================================== */
+router.get("/freelancer", auth, getFreelancerReviews);
 
 module.exports = router;

@@ -1,25 +1,13 @@
-const express = require("express");
-const router = express.Router();
+const router = require("express").Router();
+const auth = require("../middleware/authMiddleware");
+const Message = require("../models/Message");
 
-const {
-  sendMessage,
-  getMessages,
-} = require("../controllers/messageController");
+router.get("/:orderId", auth, async (req, res) => {
+  const messages = await Message.find({ order: req.params.orderId })
+    .populate("sender", "name")
+    .sort({ createdAt: 1 });
 
-const authMiddleware = require("../middleware/authMiddleware");
-
-/*
-=================================================
-SEND MESSAGE
-=================================================
-*/
-router.post("/", authMiddleware, sendMessage);
-
-/*
-=================================================
-GET MESSAGES FOR AN ORDER
-=================================================
-*/
-router.get("/:orderId", authMiddleware, getMessages);
+  res.json(messages);
+});
 
 module.exports = router;

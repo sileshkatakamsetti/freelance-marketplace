@@ -25,11 +25,17 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+
+    // 🟡 DAY 27 / 28 – Freelancer Earnings (NO logic change)
+    earnings: {
+      type: Number,
+      default: 0,
+    },
   },
   { timestamps: true }
 );
 
-// Match password
+// Match password (UNCHANGED)
 userSchema.methods.matchPassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
 };

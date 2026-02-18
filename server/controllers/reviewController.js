@@ -1,82 +1,69 @@
 const Review = require("../models/Review");
-const Gig = require("../models/Gig");
+const Order = require("../models/Order");
 
-/*
-=================================================
-POST REVIEW
-=================================================
-*/
+/* =====================================
+   CLIENT SUBMIT REVIEW
+===================================== */
 exports.createReview = async (req, res) => {
   try {
-    const { gig, order, rating, comment } = req.body;
+    const { orderId, rating, comment } = req.body;
 
-    // 1️⃣ Validate rating
-    if (rating < 1 || rating > 5) {
-      return res.status(400).json({
-        message: "Rating must be between 1 and 5",
-      });
+    if (!orderId || !rating || !comment) {
+      return res.status(400).json({ message: "All fields required" });
     }
 
-    // 2️⃣ Prevent duplicate review per order
-    const alreadyReviewed = await Review.findOne({ order });
-
-    if (alreadyReviewed) {
-      return res.status(400).json({
-        message: "Review already submitted for this order",
-      });
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res.status(404).json({ message: "Order not found" });
     }
 
-    // 3️⃣ Create review
+    // Only client of the order
+    if (order.client.toString() !== req.user.id) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    // Only after completion
+    if (order.status !== "completed") {
+      return res.status(400).json({ message: "Order not completed yet" });
+    }
+
+    // Prevent duplicate review
+    const existing = await Review.findOne({ order: orderId });
+    if (existing) {
+      return res.status(400).json({ message: "Review already submitted" });
+    }
+
     const review = await Review.create({
-      gig,
-      order,
-      user: req.user._id,
+      order: order._id,
+      client: req.user.id,
+      freelancer: order.freelancer, // 🔥 CRITICAL
       rating,
       comment,
     });
 
-    /*
-    =========================================
-    🔥 Recalculate Gig Rating
-    =========================================
-    */
-    const reviews = await Review.find({ gig });
-
-    const totalRating = reviews.reduce(
-      (acc, item) => acc + item.rating,
-      0
-    );
-
-    const averageRating = totalRating / reviews.length;
-
-    await Gig.findByIdAndUpdate(gig, {
-      averageRating: Number(averageRating.toFixed(1)),
-      numReviews: reviews.length,
-    });
-
     res.status(201).json(review);
-
   } catch (error) {
-    console.error("Create review error:", error.message);
     res.status(500).json({ message: error.message });
   }
 };
 
-/*
-=================================================
-GET REVIEWS BY GIG ID
-=================================================
-*/
-exports.getReviewsByGig = async (req, res) => {
+/* =====================================
+   FREELANCER VIEW REVIEWS
+===================================== */
+exports.getFreelancerReviews = async (req, res) => {
   try {
-    const reviews = await Review.find({ gig: req.params.gigId })
-      .populate("user", "name email")
-      .sort({ createdAt: -1 });
+    if (req.user.role !== "freelancer") {
+      return res.status(403).json({ message: "Access denied" });
+    }
 
-    res.status(200).json(reviews);
+    const reviews = await Review.find({
+      freelancer: req.user.id, // 🔥 THIS FIXES YOUR ISSUE
+    })
+      .populate("client", "name")
+      .populate("order", "price");
 
+    res.json({ reviews });
   } catch (error) {
-    console.error("Get reviews error:", error.message);
     res.status(500).json({ message: error.message });
   }
 };

@@ -2,20 +2,19 @@ const mongoose = require("mongoose");
 
 const reviewSchema = new mongoose.Schema(
   {
-    gig: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Gig",
-      required: true,
-    },
-
     order: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Order",
       required: true,
-      unique: true, // one review per order
     },
 
-    user: {
+    client: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+
+    freelancer: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,

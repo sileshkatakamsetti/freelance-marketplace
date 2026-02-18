@@ -1,73 +1,32 @@
 const express = require("express");
 const router = express.Router();
+const auth = require("../middleware/authMiddleware");
 
 const {
   createOrder,
   getClientOrders,
   getFreelancerOrders,
-  updateOrderStatus,
+  submitWork,
+  completeOrder,
   getSingleOrder,
-  cancelOrder,
-  markOrderPaid,
-  sendMessage,
 } = require("../controllers/orderController");
 
-const authMiddleware = require("../middleware/authMiddleware");
+/* CREATE ORDER */
+router.post("/", auth, createOrder);
 
-/*
-=================================================
-CREATE ORDER (Client Only)
-=================================================
-*/
-router.post("/", authMiddleware, createOrder);
+/* CLIENT ORDERS */
+router.get("/client", auth, getClientOrders);
 
-/*
-=================================================
-MARK ORDER AS PAID (Client Payment Simulation)
-=================================================
-*/
-router.put("/pay/:id", authMiddleware, markOrderPaid);
+/* FREELANCER ORDERS */
+router.get("/freelancer", auth, getFreelancerOrders);
 
-/*
-=================================================
-CLIENT: VIEW OWN ORDERS
-=================================================
-*/
-router.get("/client", authMiddleware, getClientOrders);
+/* SUBMIT WORK */
+router.put("/:orderId/submit", auth, submitWork);
 
-/*
-=================================================
-FREELANCER: VIEW ASSIGNED ORDERS
-=================================================
-*/
-router.get("/freelancer", authMiddleware, getFreelancerOrders);
+/* CLIENT ACCEPT WORK */
+router.put("/:orderId/complete", auth, completeOrder);
 
-/*
-=================================================
-CANCEL ORDER (Client Only)
-=================================================
-*/
-router.put("/cancel/:id", authMiddleware, cancelOrder);
-
-/*
-=================================================
-SEND MESSAGE INSIDE ORDER
-=================================================
-*/
-router.post("/:id/message", authMiddleware, sendMessage);
-
-/*
-=================================================
-UPDATE ORDER STATUS (Freelancer)
-=================================================
-*/
-router.put("/:id", authMiddleware, updateOrderStatus);
-
-/*
-=================================================
-GET SINGLE ORDER (KEEP LAST)
-=================================================
-*/
-router.get("/:id", authMiddleware, getSingleOrder);
+/* SINGLE ORDER */
+router.get("/:id", auth, getSingleOrder);
 
 module.exports = router;

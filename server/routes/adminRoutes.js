@@ -9,6 +9,7 @@ const {
   getAllGigsAdmin,
   deleteGigAdmin,
   getAllOrdersAdmin,
+  releaseOrderFunds, // 🟡 DAY 27
 } = require("../controllers/adminController");
 
 // Dashboard
@@ -22,7 +23,14 @@ router.put("/users/:userId/block", authMiddleware, toggleBlockUser);
 router.get("/gigs", authMiddleware, getAllGigsAdmin);
 router.delete("/gigs/:gigId", authMiddleware, deleteGigAdmin);
 
-// Order monitoring ✅
+// Order monitoring
 router.get("/orders", authMiddleware, getAllOrdersAdmin);
+
+// 🟡 DAY 27 – Admin Escrow Release (NO existing logic changed)
+router.post(
+  "/orders/:orderId/release-funds",
+  authMiddleware,
+  releaseOrderFunds
+);
 
 module.exports = router;

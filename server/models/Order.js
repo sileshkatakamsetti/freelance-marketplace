@@ -1,63 +1,39 @@
 const mongoose = require("mongoose");
 
-const messageSchema = new mongoose.Schema(
-  {
-    sender: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-    },
-    message: {
-      type: String,
-      required: true,
-    },
-  },
-  { timestamps: true }
-);
-
 const orderSchema = new mongoose.Schema(
   {
-    gig: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Gig",
-      required: true,
-    },
+    gig: { type: mongoose.Schema.Types.ObjectId, ref: "Gig", required: true },
+    client: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    freelancer: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
 
-    client: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-    },
-
-    freelancer: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-    },
-
-    price: {
-      type: Number,
-      required: true,
-    },
+    price: { type: Number, required: true },
 
     status: {
       type: String,
-      enum: ["pending", "accepted", "completed", "cancelled"],
+      enum: ["pending", "in-progress", "delivered", "completed"],
       default: "pending",
     },
 
     paymentStatus: {
       type: String,
-      enum: ["unpaid", "paid", "refunded"],
+      enum: ["unpaid", "paid"],
       default: "unpaid",
     },
 
-    paymentIntentId: {
-      type: String,
-    },
+    deliveryMessage: String,
+    deliveryLink: String,
+    deliveredAt: Date,
 
-    // 🟢 NEW — Messages inside order
-    messages: [messageSchema],
+    razorpayPaymentId: String,
+
+    // 🟡 DAY 27 – Escrow fields (NO logic change)
+    fundsReleased: {
+      type: Boolean,
+      default: false,
+    },
+    releasedAt: {
+      type: Date,
+    },
   },
   { timestamps: true }
 );
